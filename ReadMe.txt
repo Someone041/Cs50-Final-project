@@ -1,4 +1,4 @@
-# AI Quiz Generator
+AI Quiz Generator
 Author: Alan Jiang  
 Year: Freshman  
 Major: Computer Science  
