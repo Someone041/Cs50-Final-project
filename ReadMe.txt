@@ -8,7 +8,7 @@ AI Quiz Generator is a web application that converts text or PDF documents into 
 
 Project Video
 Watch the full walkthrough here:  
-https://your-video-link-here
+https://www.youtube.com/watch?v=U8aESswuHB8
 
 GitHub Repository
 https://github.com/Someone041/Cs50-Final-project
