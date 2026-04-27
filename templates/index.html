@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Quiz Generator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .status {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .status.loading {
+            background-color: #e3f2fd;
+            color: #1976d2;
+        }
+        .status.error {
+            background-color: #ffebee;
+            color: #c62828;
+        }
+        textarea {
+            width: 100%;
+            height: 200px;
+            margin: 10px 0;
+        }
+        button {
+            background-color: #1976d2;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #1565c0;
+        }
+        .question {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .stats {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #f5f5f5;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>AI Quiz Generator</h1>
+
+    <div>
+        <label for="text">Enter text or upload a PDF:</label>
+        <textarea id="text" placeholder="Paste your text here or upload a PDF below"></textarea>
+    </div>
+
+    <div>
+        <input type="file" id="pdfUpload" accept=".pdf">
+        <button onclick="uploadPDF()">Upload PDF</button>
+    </div>
+
+    <div>
+        <label for="num">Number of questions:</label>
+        <input type="number" id="num" value="5" min="1" max="20">
+        <button onclick="generateQuiz()">Generate Quiz</button>
+    </div>
+
+    <div id="status" class="status"></div>
+
+    <div id="output"></div>
+
+    <div class="stats">
+        XP: <span id="xp">0</span><br>
+        Level: <span id="level">1</span><br>
+        Streak: <span id="streak">0</span>
+    </div>
+
+    <script>
+let currentQuiz = [];
+let currentIndex = 0;
+let score = 0;
+
+let xp = 0;
+let level = 1;
+let streak = 0;
+
+function updateStats() {
+    document.getElementById("xp").textContent = xp;
+    document.getElementById("level").textContent = level;
+    document.getElementById("streak").textContent = streak;
+}
+
+async function generateQuiz() {
+    const text = document.getElementById("text").value.trim();
+    const num = document.getElementById("num").value;
+    const output = document.getElementById("output");
+    const status = document.getElementById("status");
+
+    output.innerHTML = "";
+    status.innerHTML = "Generating quiz...";
+    status.className = "status loading";
+
+    if (!text) {
+        status.innerHTML = "Please enter text or upload a PDF first.";
+        status.className = "status error";
+        return;
+    }
+
+    try {
+        const res = await fetch("/generate_quiz", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: text, num_questions: num })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.error || "Something went wrong");
+
+        currentQuiz = data.quiz;
+        currentIndex = 0;
+        score = 0;
+
+        status.innerHTML = "Quiz ready.";
+        status.className = "status";
+
+        showQuestion();
+
+    } catch (err) {
+        status.innerHTML = err.message;
+        status.className = "status error";
+    }
+}
+
+async function uploadPDF() {
+    const fileInput = document.getElementById("pdfUpload");
+    const status = document.getElementById("status");
+
+    if (!fileInput.files.length) {
+        status.innerHTML = "Please choose a PDF file first.";
+        status.className = "status error";
+        return;
+    }
+
+    status.innerHTML = "Uploading PDF...";
+    status.className = "status loading";
+
+    const formData = new FormData();
+    formData.append("file", fileInput.files[0]);
+
+    try {
+        const res = await fetch("/upload_pdf", {
+            method: "POST",
+            body: formData
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.error || "Failed to upload PDF.");
+
+        document.getElementById("text").value = data.text || "";
+        status.innerHTML = "PDF extracted successfully.";
+        status.className = "status";
+
+    } catch (err) {
+        status.innerHTML = err.message;
+        status.className = "status error";
+    }
+}
+
+function showQuestion() {
+    const output = document.getElementById("output");
+    output.innerHTML = "";
+
+    if (currentIndex >= currentQuiz.length) {
+        const percent = Math.round((score / currentQuiz.length) * 100);
+
+        output.innerHTML =
+            "<h2>Quiz Complete</h2>" +
+            "<p>Your Score: " + score + " / " + currentQuiz.length +
+            " (" + percent + "%)</p>" +
+            "<p>" +
+            (percent >= 80 ? "Great job." : percent >= 50 ? "Not bad." : "Keep practicing.") +
+            "</p>";
+
+        xp += score * 10;
+        streak += 1;
+
+        if (xp >= level * 100) {
+            level++;
+        }
+
+        updateStats();
+        return;
+    }
+
+    const q = currentQuiz[currentIndex];
+    const div = document.createElement("div");
+    div.className = "question";
+
+    div.innerHTML =
+        "<p>Question " + (currentIndex + 1) + " of " + currentQuiz.length + "</p>" +
+        "<strong>" + q.question + "</strong><br><br>";
+
+    q.choices.forEach(choice => {
+        const btn = document.createElement("button");
+        btn.textContent = choice;
+        btn.style.margin = "5px";
+
+        btn.onclick = function () {
+            checkAnswer(choice, q.answer, q.explanation, div);
+        };
+
+        div.appendChild(btn);
+    });
+
+    output.appendChild(div);
+}
+
+function checkAnswer(selected, correct, explanation, div) {
+    const buttons = div.querySelectorAll("button");
+    buttons.forEach(btn => btn.disabled = true);
+
+    const feedback = document.createElement("p");
+
+    if (selected === correct) {
+        feedback.textContent = "Correct.";
+        feedback.style.color = "green";
+        score++;
+        xp += 10;
+        streak += 1;
+    } else {
+        feedback.textContent = "Wrong. Correct answer: " + correct;
+        feedback.style.color = "red";
+        streak = 0;
+    }
+
+    const expl = document.createElement("p");
+    expl.textContent = explanation;
+    expl.style.fontStyle = "italic";
+
+    div.appendChild(feedback);
+    div.appendChild(expl);
+
+    updateStats();
+
+    currentIndex++;
+
+    const nextMsg = document.createElement("p");
+    nextMsg.textContent = "Next question...";
+    nextMsg.style.color = "#555";
+    div.appendChild(nextMsg);
+
+    setTimeout(showQuestion, 1200);
+}
+
+updateStats();
+</script>
+</body>
+</html>
