@@ -183,14 +183,17 @@ def update_stats():
     data = request.json
     stats = load_stats()
 
-    stats["xp"] = data.get("xp", stats["xp"])
-    stats["level"] = data.get("level", stats["level"])
-    stats["streak"] = data.get("streak", stats["streak"])
+    xp_gain = data.get("xp_gain", 0)
+    streak = data.get("streak", stats["streak"])
+
+    stats["xp"] += xp_gain
+    stats["streak"] = streak
+
+    stats["level"] = (stats["xp"] // 100) + 1
 
     save_stats(stats)
 
     return jsonify(stats)
-
 
 if __name__ == "__main__":
     app.run(debug=True)
